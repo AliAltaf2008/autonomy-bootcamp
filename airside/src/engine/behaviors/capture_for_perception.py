@@ -72,6 +72,12 @@ class CaptureForPerception(py_trees.behaviour.Behaviour):
             key=blackboard_keys.LATEST_FRAME, access=py_trees.common.Access.READ
         )
 
+        #initialise() resets these attributes at the start of every attempt
+        #index of the old frame we ignore
+        self._baseline_index=None
+        #ticks spent waitign for a new frame is 0
+        self._ticks_waited=0 
+
     def _latest_frame(self):
         """
         The frame on the blackboard right now, or ``None``.
@@ -91,8 +97,9 @@ class CaptureForPerception(py_trees.behaviour.Behaviour):
         py_trees calls this on every fresh attempt, which is what lets the
         capture at the next waypoint ignore the picture from this one.
         """
-        # TODO(bootcamper): implement.
-        raise NotImplementedError
+        frame = self._latest_frame()
+        self._baseline_index = None if frame is None else frame.index
+        self._ticks_waited=0
 
     def update(self) -> py_trees.common.Status:
         """
@@ -101,5 +108,23 @@ class CaptureForPerception(py_trees.behaviour.Behaviour):
         Returns fast every tick, so the rest of the tree keeps running while
         we wait. The class docstring says exactly what to do.
         """
-        # TODO(bootcamper): implement.
-        raise NotImplementedError
+        frame = self._latest_frame()
+
+        #checks if picture exists and if the number is different than the old one
+        if frame is not None and frame.index != self._baseline_index:
+            self._publisher.publish_image(frame)
+            self._publisher.publish_status({"phase": "capture", "frame_index": frame.index})
+            self.feedback_message = f"captured frame {frame.index}"
+            return py_trees.common.Status.SUCCESS
+
+        #If there is no new picture, add one to the count
+        #If the limit has been reached for creating new pictures, give up
+        self._ticks_waited +=1
+        if self._ticks_waited >= self._timeout_ticks:
+            self.feedback_message = "no new frame, now giving up"
+            return py_trees.common.Status.FAILURE
+
+        #If the limit has not been reached yet then check agian next time
+        self.feedback_message = "waiting for a new frame"
+        return py_trees.common.Status.RUNNING
+    
