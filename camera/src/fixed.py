@@ -101,7 +101,6 @@ class FixedCamera(AbstractCamera):
 
     def stop(self) -> None:
         """Turn the camera off.
-
         One flag, no cleanup, so calling it twice or before starting is fine.
         Capturing raises from here on.
         """
